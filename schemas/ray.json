@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Ray",
+  "type": "object",
+  "properties": {
+    "x": {"type": "number"},
+    "y": {"type": "number"},
+    "r": {"type": "number"},
+    "phi": {"type": "number"},
+    "dr": {"type": "number"},
+    "dphi": {"type": "number"},
+    "E": {"type": "number"},
+    "trail": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {"type": "number"},
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
+  },
+  "required": ["x", "y", "r", "phi", "dr", "dphi", "E", "trail"]
+}

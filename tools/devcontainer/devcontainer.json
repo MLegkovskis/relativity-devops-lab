@@ -1,0 +1,10 @@
+{
+  "name": "blackhole-sim-dev",
+  "dockerComposeFile": ["../../infra/docker-compose.yml"],
+  "service": "ray-api",
+  "workspaceFolder": "/workspace",
+  "settings": {
+    "python.pythonPath": "/usr/local/bin/python"
+  },
+  "extensions": ["ms-python.python", "ms-toolsai.jupyter"]
+}
