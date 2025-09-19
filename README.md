@@ -1,5 +1,5 @@
 
-# Blackhole-Sim: Microservices Physics Demo
+# Blackhole-Sim: Microservices (to be) Physics Demo
 
 >This project is a hands-on introduction to microservices, APIs, and containerization using a physics simulation of light rays near a black hole. It's designed for beginners—no prior experience with microservices or APIs required!
 
