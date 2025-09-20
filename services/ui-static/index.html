@@ -21,8 +21,9 @@
 
     <script>
       // --- Config (change if you mapped ports differently) ---
-      const RAY_API = "http://localhost:8000";
-      const BH_API  = "http://localhost:8001";
+      const USING_COMPOSE = window.location.port === "8080"; // docker-compose exposes UI on 8080
+      const RAY_API = USING_COMPOSE ? "http://localhost:8000" : "/ray-api";
+      const BH_API  = USING_COMPOSE ? "http://localhost:8001" : "/blackhole-api";
       const MASS    = 8.54e36;
       const c       = 299792458.0;
 

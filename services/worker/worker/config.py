@@ -1,1 +1,0 @@
-# Worker config (if needed)
