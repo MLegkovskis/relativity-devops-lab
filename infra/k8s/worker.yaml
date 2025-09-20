@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/instance: worker
     app.kubernetes.io/component: worker
     app.kubernetes.io/part-of: blackhole
+    tier: worker
+    system: blackhole
 spec:
   replicas: 1
   selector:
@@ -19,6 +21,8 @@ spec:
         app.kubernetes.io/name: worker
         app.kubernetes.io/component: worker
         app.kubernetes.io/part-of: blackhole
+        tier: worker
+        system: blackhole
     spec:
       containers:
         - name: worker

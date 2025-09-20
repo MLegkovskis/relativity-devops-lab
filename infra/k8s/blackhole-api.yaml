@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/instance: blackhole-api
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: blackhole
+    tier: api
+    system: blackhole
 spec:
   replicas: 1
   selector:
@@ -19,6 +21,8 @@ spec:
         app.kubernetes.io/name: blackhole-api
         app.kubernetes.io/component: api
         app.kubernetes.io/part-of: blackhole
+        tier: api
+        system: blackhole
     spec:
       containers:
         - name: blackhole-api
@@ -54,12 +58,16 @@ metadata:
     app.kubernetes.io/instance: blackhole-api
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: blackhole
+    tier: api
+    system: blackhole
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: blackhole-api
     app.kubernetes.io/component: api
+    tier: api
   ports:
     - name: http
       port: 8001
       targetPort: http
+      nodePort: 30082

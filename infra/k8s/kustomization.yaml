@@ -12,4 +12,3 @@ resources:
   - blackhole-api.yaml
   - worker.yaml
   - ui.yaml
-  - ingress.yaml

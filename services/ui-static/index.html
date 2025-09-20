@@ -22,8 +22,9 @@
     <script>
       // --- Config (change if you mapped ports differently) ---
       const USING_COMPOSE = window.location.port === "8080"; // docker-compose exposes UI on 8080
-      const RAY_API = USING_COMPOSE ? "http://localhost:8000" : "/ray-api";
-      const BH_API  = USING_COMPOSE ? "http://localhost:8001" : "/blackhole-api";
+      const USING_K8S_NODEPORT = window.location.port === "30080"; // k3s NodePort exposes UI on 30080
+      const RAY_API = USING_COMPOSE ? "http://localhost:8000" : USING_K8S_NODEPORT ? "http://localhost:30081" : "/ray-api";
+      const BH_API  = USING_COMPOSE ? "http://localhost:8001" : USING_K8S_NODEPORT ? "http://localhost:30082" : "/blackhole-api";
       const MASS    = 8.54e36;
       const c       = 299792458.0;
 

@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/instance: ui
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: blackhole
+    tier: frontend
+    system: blackhole
 spec:
   replicas: 1
   selector:
@@ -19,6 +21,8 @@ spec:
         app.kubernetes.io/name: ui
         app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: blackhole
+        tier: frontend
+        system: blackhole
     spec:
       containers:
         - name: ui
@@ -56,12 +60,16 @@ metadata:
     app.kubernetes.io/instance: ui
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: blackhole
+    tier: frontend
+    system: blackhole
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: ui
     app.kubernetes.io/component: frontend
+    tier: frontend
   ports:
     - name: http
       port: 80
       targetPort: http
+      nodePort: 30080

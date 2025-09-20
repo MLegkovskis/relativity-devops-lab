@@ -61,3 +61,9 @@ k8s-restart-ui:
 
 k8s-delete:
 	kubectl delete -k infra/k8s
+
+
+
+      - docker build -t marilee/blackhole-k8s:ui-dev -f services/ui-static/Dockerfile .
+      - docker push marilee/blackhole-k8s:ui-dev
+      - docker compose -f infra/docker-compose.yml up --build (for local stack)

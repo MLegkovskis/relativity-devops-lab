@@ -68,7 +68,7 @@ blackhole-kubernettes/
 
 ## Running On k3s (Kubernetes)
 
-The manifests under `infra/k8s/` create the same services declaratively.
+The manifests under `infra/k8s/` create the same services declaratively. Instead of an ingress controller we surface the containers through NodePort services so plain `http://localhost:<port>` works out of the box.
 
 ### Images
 Push the four service images to a registry reachable by k3s (example uses Docker Hub):
@@ -88,9 +88,12 @@ docker push marilee/blackhole-k8s:worker-dev
 ```bash
 kubectl apply -k infra/k8s
 kubectl get pods -n blackhole
-kubectl get ingress -n blackhole
+kubectl get svc -n blackhole
 ```
-Then browse to `http://localhost/` (the ingress host).
+Then browse to the NodePort endpoints:
+- UI → `http://localhost:30080`
+- ray-api → `http://localhost:30081`
+- blackhole-api → `http://localhost:30082`
 
 ### Helpful Commands
 ```bash
@@ -100,9 +103,42 @@ kubectl delete -k infra/k8s  # remove stack
 ```
 
 ### What to Observe
-- **Explicit Services/Ingress.** Kubernetes needs ClusterIP services and an ingress rule. Traefik middleware strips `/ray-api` and `/blackhole-api` prefixes before they reach FastAPI.
+- **Networking is explicit.** Each public endpoint is a NodePort service; the cluster IPs stay internal, the node ports surface on `localhost`.
 - **Image pulls are remote.** Deployments reference the pushed tags; `imagePullPolicy: Always` ensures fresh code on each rollout.
-- **UI auto-detects this mode.** When it does not find port `8080`, it calls the same-origin ingress paths instead of `localhost` ports.
+- **UI auto-detects this mode.** When it sees port `30080`, it calls the NodePort APIs on `30081/30082`.
+
+### Kubernetes Resource Flow
+```mermaid
+graph LR
+    User((Browser @ localhost)) --> UI_NodePort["Service: ui
+NodePort 30080"]
+    UI_NodePort --> UI_Pods["Deployment: ui
+Pod(s)"]
+    UI_Pods --> Ray_NodePort["Service: ray-api
+NodePort 30081"]
+    UI_Pods --> BH_NodePort["Service: blackhole-api
+NodePort 30082"]
+    Ray_NodePort --> Ray_Pods["Deployment: ray-api
+Pod(s)"]
+    BH_NodePort --> BH_Pods["Deployment: blackhole-api
+Pod(s)"]
+    Worker_Pods["Deployment: worker
+Pod(s)"] --> Redis_Svc["Service: redis
+ClusterIP 6379"]
+    Redis_Svc --> Redis_Pods["Deployment: redis
+Pod"]
+    subgraph Namespace: blackhole
+        UI_NodePort
+        UI_Pods
+        Ray_NodePort
+        Ray_Pods
+        BH_NodePort
+        BH_Pods
+        Worker_Pods
+        Redis_Svc
+        Redis_Pods
+    end
+```
 
 ### Kubectl Command Reference
 Below is a field guide of the `kubectl` commands we used (and a few extras) with context-specific notes and sample outputs. All commands assume the resources live in the `blackhole` namespace established by the manifests.
@@ -135,22 +171,13 @@ ray-api-6896647c7c-597dh         1/1     Running   0          5m    10.42.0.11  
 ```bash
 kubectl get svc -n blackhole
 ```
-_Verify in-cluster service endpoints._
+_Verify NodePort allocations and cluster IPs._
 ```
-NAME             TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-blackhole-api    ClusterIP   10.43.82.103   <none>        8001/TCP   5m
-ray-api          ClusterIP   10.43.6.177    <none>        8000/TCP   5m
-redis            ClusterIP   10.43.122.38   <none>        6379/TCP   5m
-ui               ClusterIP   10.43.2.78     <none>        80/TCP     5m
-```
-
-```bash
-kubectl get ingress -n blackhole
-```
-_Confirms Traefik picked up the host and routes._
-```
-NAME   CLASS     HOSTS       ADDRESS         PORTS   AGE
-ui     traefik   localhost   192.168.1.199   80      5m
+NAME             TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)           AGE
+blackhole-api    NodePort   10.43.82.103   <none>        8001:30082/TCP    5m
+ray-api          NodePort   10.43.6.177    <none>        8000:30081/TCP    5m
+redis            ClusterIP  10.43.122.38   <none>        6379/TCP          5m
+ui               NodePort   10.43.2.78     <none>        80:30080/TCP      5m
 ```
 
 **Logs & Debugging**
@@ -159,7 +186,7 @@ kubectl logs deploy/ray-api -n blackhole --tail=20
 ```
 _Fetch the latest requests handled by the ray tracer._
 ```
-INFO:     10.42.0.12:49164 - "POST /integrate HTTP/1.1" 200 OK
+INFO:     10.42.0.12:49164 - \"POST /integrate HTTP/1.1\" 200 OK
 ```
 
 ```bash
@@ -192,7 +219,7 @@ _Spins up an extra API replica so you can watch request balancing._
 ```bash
 kubectl port-forward svc/ray-api 9000:8000 -n blackhole
 ```
-_Expose the in-cluster API on `localhost:9000` without touching ingress._
+_Expose the in-cluster API on `localhost:9000` without touching NodePorts._
 
 ```bash
 kubectl get events -n blackhole --sort-by=.metadata.creationTimestamp
@@ -203,21 +230,29 @@ _View chronological events to debug probe failures or scheduling delays._
 ```bash
 kubectl delete -k infra/k8s
 ```
-_Removes the namespace, middleware, deployments, and services created by the manifests._
+_Removes the namespace, deployments, and services created by the manifests._
+
+### Label Cheatsheet
+We stick to a small set of labels so selectors stay readable:
+- `app.kubernetes.io/name` – canonical service name; used by Services to discover Pods.
+- `app.kubernetes.io/instance` – unique identifier for this workload (convenient when you run multiple stacks).
+- `app.kubernetes.io/component` – aligns with the Kubernetes recommended labels and pairs with the Service selectors.
+- `app.kubernetes.io/part-of` – indicates the broader application so you can query everything related to Blackhole.
+- `tier` – human term for the role (`frontend`, `api`, `worker`, `datastore`).
+- `system` – umbrella application (`blackhole`).
 
 ---
-
 ## Compose vs Kubernetes – Side-by-Side
 
 | Concern | Docker Compose | Kubernetes (k3s) | Takeaway |
 | ------- | --------------- | ----------------- | -------- |
 | Orchestration file | `infra/docker-compose.yml` | `infra/k8s/*.yaml` (kustomize) | Compose is imperative; Kubernetes is declarative. |
-| Networking | Automatic service discovery through Docker DNS | Explicit `Service` objects and Ingress rules | Kubernetes forces you to model networking upfront. |
+| Networking | Automatic service discovery through Docker DNS | Explicit `Service` objects and NodePort exposure | Kubernetes forces you to model networking upfront. |
 | Image distribution | Built locally, shared via Docker daemon | Pulled from registry (or preloaded into cluster) | Registries are part of the workflow in Kubernetes. |
 | Scaling | `docker compose up --scale service=n` | `spec.replicas` per `Deployment` | Both can scale, Kubernetes records desired state. |
 | Config updates | `docker compose up --build` rebuilds and restarts | `kubectl apply` + `kubectl rollout restart` | Kubernetes separates configuration from rollout control. |
 | Logs | `docker compose logs` | `kubectl logs` with label selectors | Same data, different tooling. |
-| UI routing | Browser hits host ports directly (`localhost:8000/8001`) | Browser hits ingress (`/ray-api`, `/blackhole-api`) | The UI detects which path to use at runtime.
+| UI routing | Browser hits host ports directly (`localhost:8080` → `8000/8001`) | Browser uses NodePorts (`localhost:30080` → `30081/30082`) | The UI detects which path to use at runtime. |
 
 Both environments share the same code, Dockerfiles, and environment variables. The only difference is how endpoints are exposed and how images reach the runtime.
 
@@ -243,9 +278,8 @@ Both environments share the same code, Dockerfiles, and environment variables. T
 | Symptom | Likely Cause | Fix |
 | ------- | ------------ | --- |
 | UI shows `NetworkError` in Compose | APIs not reachable on host ports | Ensure Compose stack is up; check `docker compose ps`. |
-| UI shows `NetworkError` on k3s | Ingress or images not updated | Reapply manifests, restart `ui` deployment, ensure images were pushed with latest HTML. |
+| UI shows `NetworkError` on k3s | NodePort services not reachable or images stale | Reapply manifests, ensure images are pushed, and confirm ports 30080-30082 are open. |
 | Pods stay in `ImagePullBackOff` | Registry not accessible or tag missing | Push images to the configured registry or preload them: `k3s ctr images import`. |
-| `kubectl apply` warns about middleware | Using old Traefik CRD version | Manifests already use `traefik.io/v1alpha1`; ensure k3s has Traefik CRDs (default install does). |
 
 ---
 
@@ -259,6 +293,6 @@ Both environments share the same code, Dockerfiles, and environment variables. T
 
 ### Why This Project Matters
 
-The code stays constant while the orchestration changes. By diffing the Compose and Kubernetes directories you can see exactly what extra plumbing Kubernetes expects—namespaces, services, ingress, middleware, rollouts—without changing a single line of application logic. That tangible comparison makes it an effective jump-off point for learning containers, microservices, and modern platform engineering.
+The code stays constant while the orchestration changes. By diffing the Compose and Kubernetes directories you can see exactly what extra plumbing Kubernetes expects—namespaces, services, NodePorts, rollouts—without changing a single line of application logic. That tangible comparison makes it an effective jump-off point for learning containers, microservices, and modern platform engineering.
 
 Enjoy the journey!

@@ -5,10 +5,9 @@ This directory contains Kubernetes manifests for running the application on a lo
 ## Layout
 - `namespace.yaml` – creates the `blackhole` namespace used by all workloads.
 - `redis.yaml` – deployment and service for the Redis datastore.
-- `ray-api.yaml` / `blackhole-api.yaml` – API deployments with internal services.
+- `ray-api.yaml` / `blackhole-api.yaml` – API deployments with NodePort services you can hit from localhost.
 - `worker.yaml` – background worker deployment wired to Redis.
-- `ui.yaml` – static UI deployment with service exposed via ingress.
-- `ingress.yaml` – Traefik ingress routing `localhost` to the UI service.
+- `ui.yaml` – static UI deployment with a NodePort service.
 - `kustomization.yaml` – helper to apply the stack.
 
 ## Usage
@@ -17,11 +16,13 @@ This directory contains Kubernetes manifests for running the application on a lo
    ```bash
    kubectl apply -k infra/k8s
    ```
-3. Browse to http://localhost/ once the pods are ready.
+3. Once the pods are ready, open the UI on the NodePort service: http://localhost:30080
+   - ray-api lives at http://localhost:30081
+   - blackhole-api lives at http://localhost:30082
 4. Check rollouts:
    ```bash
    kubectl get pods -n blackhole
-   kubectl get ingress -n blackhole
+   kubectl get svc -n blackhole
    ```
 
 To remove everything, run `kubectl delete -k infra/k8s`.
