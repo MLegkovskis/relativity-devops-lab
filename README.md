@@ -301,17 +301,18 @@ The Helm chart under `infra/helm` is completely self-contained; it only renders 
 ---
 
 ---
-## Compose vs Kubernetes – Side-by-Side
+## Compose vs Kubernetes vs Helm
 
-| Concern | Docker Compose | Kubernetes (k3s) | Takeaway |
-| ------- | --------------- | ----------------- | -------- |
-| Orchestration file | `infra/docker-compose.yml` | `infra/k8s/*.yaml` (kustomize) | Compose is imperative; Kubernetes is declarative. |
-| Networking | Automatic service discovery through Docker DNS | Explicit `Service` objects and NodePort exposure | Kubernetes forces you to model networking upfront. |
-| Image distribution | Built locally, shared via Docker daemon | Pulled from registry (or preloaded into cluster) | Registries are part of the workflow in Kubernetes. |
-| Scaling | `docker compose up --scale service=n` | `spec.replicas` per `Deployment` | Both can scale, Kubernetes records desired state. |
-| Config updates | `docker compose up --build` rebuilds and restarts | `kubectl apply` + `kubectl rollout restart` | Kubernetes separates configuration from rollout control. |
-| Logs | `docker compose logs` | `kubectl logs` with label selectors | Same data, different tooling. |
-| UI routing | Browser hits host ports directly (`localhost:8080` → `8000/8001`) | Browser uses NodePorts (`localhost:30080` → `30081/30082`) | The UI detects which path to use at runtime. |
+| Concern | Docker Compose | Kubernetes (k3s) | Helm (UI chart) | Takeaway |
+| ------- | --------------- | ----------------- | --------------- | -------- |
+| Orchestration files | `infra/docker-compose.yml` | `infra/k8s/*.yaml` + `kustomization.yaml` | `infra/helm/Chart.yaml`, `values.yaml`, `templates/*.yaml` | Compose is imperative YAML; Kustomize and Helm build declarative manifests with different packaging. |
+| Scope | Full stack (UI, APIs, worker, Redis) | Full stack (same services) | UI Deployment + Service today | Helm chart starts minimal—extend it by templating more services. |
+| Networking | Docker DNS (`http://ray-api:8000`) and host port `8080` for UI | NodePort Services (`30080/30081/30082`) | Same NodePort pattern, currently only `ui` on `30080` | Helm runs on Kubernetes, so networking behavior matches the underlying cluster. |
+| Image distribution | Built locally with shared Docker daemon | Pull from registry / `k3s ctr images import` | Same registry flow, repository overridden via `--set repository=...` | Helm rides on top of Kubernetes image pulls. |
+| Scaling | `docker compose up --scale service=2` | `kubectl scale deploy/<svc>` | Edit template / add values then `helm upgrade` | Helm captures desired replicas in chart values, aligning with Kubernetes desired state. |
+| Config updates | `docker compose up --build` | `kubectl apply` + rollout commands | `helm upgrade --install ... [--set ...]` | Helm bundles manifests + configuration for versioned rollouts. |
+| Logs & debugging | `docker compose logs` | `kubectl logs`, `kubectl describe` | Same `kubectl` commands (Helm just labeled resources with release info) | Tooling converges once workloads run in Kubernetes. |
+| UI routing | Browser → `localhost:8080` (Compose) | Browser → `localhost:30080` (NodePort) | Browser → `localhost:30080` (NodePort) | Application detects environment; routing differs between Compose vs Kubernetes. |
 
 Both environments share the same code, Dockerfiles, and environment variables. The only difference is how endpoints are exposed and how images reach the runtime.
 
