@@ -1,0 +1,2 @@
+# The only value we template: container registry/repository for all images.
+repository: marilee/blackhole-k8s

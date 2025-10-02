@@ -1,0 +1,10 @@
+1. Make sure the namespace exists:
+   kubectl create namespace blackhole
+
+2. Install or upgrade via Helm:
+   helm upgrade --install ui ./infra/heml \
+     --namespace blackhole \
+     --create-namespace
+
+3. Access the UI through the NodePort:
+   echo "Browse http://localhost:30080"

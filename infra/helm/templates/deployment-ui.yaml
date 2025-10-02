@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: blackhole
+  labels:
+    app: ui
+    app.kubernetes.io/name: ui
+    app.kubernetes.io/part-of: blackhole
+    tier: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+        app.kubernetes.io/name: ui
+        app.kubernetes.io/part-of: blackhole
+        tier: frontend
+    spec:
+      containers:
+        - name: ui
+          image: "{{ .Values.repository }}:ui-dev"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

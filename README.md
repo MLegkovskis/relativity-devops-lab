@@ -70,6 +70,13 @@ blackhole-kubernettes/
 
 The manifests under `infra/k8s/` create the same services declaratively. Instead of an ingress controller we surface the containers through NodePort services so plain `http://localhost:<port>` works out of the box.
 
+> **Note:** A default k3s install writes its kubeconfig to `/etc/rancher/k3s/k3s.yaml` with root-only permissions. Either run the commands below with `sudo`, or copy/adjust the kubeconfig so your user can read it:
+> ```bash
+> sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+> sudo chown $(id -u):$(id -g) ~/.kube/config
+> export KUBECONFIG=~/.kube/config
+> ```
+
 ### Images
 Push the four service images to a registry reachable by k3s (example uses Docker Hub):
 ```bash
@@ -240,6 +247,58 @@ We stick to a small set of labels so selectors stay readable:
 - `app.kubernetes.io/part-of` – indicates the broader application so you can query everything related to Blackhole.
 - `tier` – human term for the role (`frontend`, `api`, `worker`, `datastore`).
 - `system` – umbrella application (`blackhole`).
+
+## Deploying with Helm
+
+Helm gives you a packaged view of the same manifests so you can version experiments and roll physics tweaks out in a single command. The chart lives in `infra/helm` and currently deploys the UI.
+
+### Install or upgrade
+Make sure your `kubectl` context can read the k3s kubeconfig (see note above) or export `KUBECONFIG=~/.kube/config` before continuing.
+
+If you previously applied the raw manifests (or any other tool) remove the `ui` resources so Helm can own them:
+
+```bash
+kubectl delete svc ui -n blackhole || true
+kubectl delete deployment ui -n blackhole || true
+```
+
+Then install (or upgrade) the release:
+
+```bash
+helm upgrade --install blackhole infra/helm --namespace blackhole --create-namespace
+```
+
+Add `--set repository=<your-docker-username>/blackhole-k8s` if you push to a different registry. Drop the flag to use the default repository from `infra/helm/values.yaml`. After the rollout finishes, reuse the NodePort endpoints (`http://localhost:30080` for the UI).
+
+### Preview manifests
+Render without installing if you want to diff against the Kustomize output:
+
+```bash
+helm template blackhole infra/helm --namespace blackhole
+```
+
+A focused chart README lives at `infra/helm/README.md`.
+
+### How Helm decides apply order
+All templates in the chart are rendered into plain Kubernetes manifests before anything is created. Helm then sorts the manifests using a built-in install order (namespaces, CRDs, RBAC, services, deployments, etc.) and sends them to the API server one kind at a time. That ordering lives in Helm itself, so unlike `infra/k8s/kustomization.yaml` you do not have to list files manually—the chart simply declares the resources and Helm orchestrates their creation.
+
+### Relationship to `infra/k8s`
+The Helm chart under `infra/helm` is completely self-contained; it only renders the templates inside `infra/helm/templates`. Because that folder currently holds `deployment-ui.yaml` and `service-ui.yaml`, a Helm install creates **only** the UI Deployment and Service. Files such as `infra/k8s/worker.yaml` live in the Kustomize workflow and are ignored by Helm unless you port them into the chart. If you deleted `infra/k8s`, Helm installations would continue to work for the UI because they rely solely on the chart contents. The trade-off is scope: Kustomize deploys the full stack out of the box, while Helm starts with a minimal UI-focused chart that you can grow by adding more templates (e.g., copy `infra/k8s/worker.yaml` into `infra/helm/templates/worker.yaml` and parameterize it) as part of your learning journey.
+
+### Kustomize ↔ Helm reference
+
+| Piece | `infra/k8s` source | `infra/helm` equivalent | Notes |
+| ----- | ------------------- | ----------------------- | ----- |
+| Namespace | `namespace.yaml` | (none) | Helm relies on `helm upgrade --install ... --namespace blackhole --create-namespace`; each template embeds `metadata.namespace: blackhole` but the namespace object itself is not templated. |
+| UI Deployment | `ui.yaml` (Deployment section) | `templates/deployment-ui.yaml` | Same core pod spec; Helm version drops the probes/labels for simplicity—add them if you want a 1:1 match. |
+| UI Service | `ui.yaml` (Service section) | `templates/service-ui.yaml` | Both expose NodePort `30080`; Helm injects the image repo via `values.yaml`. |
+| Ray API | `ray-api.yaml` | (not yet templated) | Add Deployment/Service templates to bring this workload under Helm. |
+| Blackhole API | `blackhole-api.yaml` | (not yet templated) | Same approach as above when you are ready. |
+| Worker | `worker.yaml` | (not yet templated) | Copy to Helm and parameterize environment variables or image tags as needed. |
+| Redis | `redis.yaml` | (not yet templated) | Can stay in Kustomize or be moved into Helm when you want a single release. |
+| Resource list | `kustomization.yaml` enumerates files | `Chart.yaml` + `values.yaml` define chart metadata & values | Helm discovers templates automatically; you manage configuration through `values.yaml` instead of listing every manifest manually. |
+
+---
 
 ---
 ## Compose vs Kubernetes – Side-by-Side

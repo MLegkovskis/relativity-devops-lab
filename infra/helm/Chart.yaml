@@ -1,0 +1,6 @@
+apiVersion: v2
+name: blackhole-ui
+description: A single-service Helm chart to learn templating with repository overrides.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
