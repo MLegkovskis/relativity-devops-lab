@@ -268,6 +268,14 @@ Then install (or upgrade) the release:
 helm upgrade --install blackhole infra/helm --namespace blackhole --create-namespace
 ```
 
+Then uninstall the release:
+
+```bash
+helm uninstall blackhole --namespace blackhole
+```
+
+
+
 Add `--set repository=<your-docker-username>/blackhole-k8s` if you push to a different registry. Drop the flag to use the default repository from `infra/helm/values.yaml`. After the rollout finishes, reuse the NodePort endpoints (`http://localhost:30080` for the UI).
 
 ### Preview manifests
