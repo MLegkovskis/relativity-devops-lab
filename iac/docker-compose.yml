@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack-pro:latest
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+      - "8081:8081"
+    environment:
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:?export_LOCALSTACK_AUTH_TOKEN_before_starting}
+      - SERVICES=eks,ecr,iam,ec2,s3,sts,logs,cloudwatch
+      - EKS_START_K3D_LB_INGRESS=1
+      - EKS_LOADBALANCER_PORT=8081
+      - DEBUG=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
