@@ -1,2 +1,14 @@
-# The only value we template: container registry/repository for all images.
+# Container registry/repository for all images.
 repository: marilee/blackhole-k8s
+
+service:
+  type: NodePort
+  nodePort: 30080
+
+rayApi:
+  port: 8000
+  nodePort: 30081
+
+blackholeApi:
+  port: 8001
+  nodePort: 30082

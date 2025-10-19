@@ -38,6 +38,10 @@ spec:
             limits:
               cpu: 250m
               memory: 256Mi
+          volumeMounts:
+            - name: ui-index
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
           readinessProbe:
             httpGet:
               path: /
@@ -50,6 +54,10 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
+      volumes:
+        - name: ui-index
+          configMap:
+            name: ui-index
 ---
 apiVersion: v1
 kind: Service

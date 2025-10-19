@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackhole-api
+  labels:
+    app: blackhole-api
+    app.kubernetes.io/name: blackhole-api
+    app.kubernetes.io/part-of: blackhole
+    tier: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blackhole-api
+  template:
+    metadata:
+      labels:
+        app: blackhole-api
+        app.kubernetes.io/name: blackhole-api
+        app.kubernetes.io/part-of: blackhole
+        tier: api
+    spec:
+      containers:
+        - name: blackhole-api
+          image: "{{ .Values.repository }}:blackhole-api-dev"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.blackholeApi.port | default 8001 }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.blackholeApi.port | default 8001 }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.blackholeApi.port | default 8001 }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
