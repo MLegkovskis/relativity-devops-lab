@@ -51,7 +51,7 @@ jobs:
               --query 'GroupId' --output text)
           fi
 
-          for PORT in 22 8080 30080 30081 30082 31080 31081 31082; do
+          for PORT in 22 8000 8001 8080 30080 30081 30082 31080 31081 31082; do
             aws ec2 authorize-security-group-ingress \
               --group-id "$SG_ID" \
               --protocol tcp \

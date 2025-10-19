@@ -23,12 +23,13 @@
       // --- Config (change if you mapped ports differently) ---
       const port = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
       const portNum = Number(port);
+      const host = window.location.hostname || "localhost";
       const USING_COMPOSE = port === "8080"; // docker-compose exposes UI on 8080
       const USING_NODEPORT = !USING_COMPOSE && portNum >= 30000;
       const nodeRayPort = USING_NODEPORT ? String(portNum + 1) : "";
       const nodeBhPort = USING_NODEPORT ? String(portNum + 2) : "";
-      const RAY_API = USING_COMPOSE ? "http://localhost:8000" : USING_NODEPORT ? `http://localhost:${nodeRayPort}` : "/ray-api";
-      const BH_API  = USING_COMPOSE ? "http://localhost:8001" : USING_NODEPORT ? `http://localhost:${nodeBhPort}` : "/blackhole-api";
+      const RAY_API = USING_COMPOSE ? `http://${host}:8000` : USING_NODEPORT ? `http://${host}:${nodeRayPort}` : "/ray-api";
+      const BH_API  = USING_COMPOSE ? `http://${host}:8001` : USING_NODEPORT ? `http://${host}:${nodeBhPort}` : "/blackhole-api";
       const mode = USING_COMPOSE ? "compose" : USING_NODEPORT ? "nodeport" : "cluster";
       function setStatus(msg) {
         document.getElementById('status').textContent = msg;

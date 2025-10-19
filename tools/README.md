@@ -20,9 +20,9 @@ Each run:
 
 | Stack | UI | ray-api | blackhole-api |
 |-------|----|---------|----------------|
-| Docker Compose | `http://localhost:8080` | `8000` | `8001` |
-| k3s (Kustomize) | `http://localhost:30080` | `30081` | `30082` |
-| Helm | `http://localhost:31080` | `31081` | `31082` |
+| Docker Compose | `http://<host>:8080` | `http://<host>:8000` | `http://<host>:8001` |
+| k3s (Kustomize) | `http://<host>:30080` | `http://<host>:30081` | `http://<host>:30082` |
+| Helm | `http://<host>:31080` | `http://<host>:31081` | `http://<host>:31082` |
 
 Adjust the constants near the top of `tri-stack.sh` if you need to remap ports.
 
