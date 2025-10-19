@@ -116,7 +116,7 @@ jobs:
           echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
 
       - name: Associate Elastic IP
-        if: secrets.EIP_ALLOCATION_ID != ''
+        if: "${{ secrets.EIP_ALLOCATION_ID }}" != ''
         run: |
           set -euo pipefail
           aws ec2 associate-address \
