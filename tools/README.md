@@ -66,3 +66,5 @@ Use the same secrets to tear the stack down by re-running the workflow; it alway
 scp tools/setup-ubuntu-host.sh ubuntu@<host>:/tmp/setup.sh
 ssh ubuntu@<host> "sudo REMOTE_USER=ubuntu bash /tmp/setup.sh"
 ```
+
+Both the Helm chart (`infra/helm/files/index.html`) and the k3s kustomization (`infra/k8s/ui-index/index.html`) reference the main UI HTML via symlinks into `services/ui-static/index.html`, so the UI only needs to be edited in one place.
