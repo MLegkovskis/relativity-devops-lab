@@ -115,6 +115,17 @@ jobs:
           PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
           echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
 
+      - name: Associate Elastic IP
+        if: secrets.EIP_ALLOCATION_ID != ''
+        run: |
+          set -euo pipefail
+          aws ec2 associate-address \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --allocation-id "${{ secrets.EIP_ALLOCATION_ID }}" \
+            --allow-reassociation >/dev/null
+          PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
+
       - name: Prepare SSH key
         run: |
           set -euo pipefail

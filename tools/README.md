@@ -42,9 +42,10 @@ The workflow in `.github/workflows/deploy-aws.yml` boots an Ubuntu EC2 instance,
    chmod 600 tri-stack-deploy.pem
    ```
 3. Add the following GitHub repository secrets:
-   - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from step 1.
-   - `EC2_KEY_PAIR_NAME` → `tri-stack-deploy` (or your chosen key-pair name).
-   - `EC2_SSH_KEY` → entire contents of `tri-stack-deploy.pem`.
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from step 1.
+- `EC2_KEY_PAIR_NAME` → `tri-stack-deploy` (or your chosen key-pair name).
+- `EC2_SSH_KEY` → entire contents of `tri-stack-deploy.pem`.
+- Optionally allocate an Elastic IP and add its Allocation ID as `EIP_ALLOCATION_ID` to pin the public address between runs.
 
 ### Running the Workflow
 
