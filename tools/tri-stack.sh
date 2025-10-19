@@ -36,8 +36,8 @@ sync_ui_assets() {
   [[ -f $UI_SOURCE ]] || fatal "UI source HTML not found at $UI_SOURCE"
   mkdir -p "$(dirname "$HELM_INDEX")"
   mkdir -p "$(dirname "$K8S_INDEX")"
-  ln -sf "$UI_SOURCE" "$HELM_INDEX"
-  ln -sf "$UI_SOURCE" "$K8S_INDEX"
+  cp "$UI_SOURCE" "$HELM_INDEX"
+  cp "$UI_SOURCE" "$K8S_INDEX"
 }
 
 wait_for_url() {

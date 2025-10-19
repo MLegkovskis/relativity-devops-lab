@@ -67,4 +67,4 @@ scp tools/setup-ubuntu-host.sh ubuntu@<host>:/tmp/setup.sh
 ssh ubuntu@<host> "sudo REMOTE_USER=ubuntu bash /tmp/setup.sh"
 ```
 
-Both the Helm chart (`infra/helm/files/index.html`) and the k3s kustomization (`infra/k8s/ui-index/index.html`) reference the main UI HTML via symlinks into `services/ui-static/index.html`, so the UI only needs to be edited in one place.
+`tri-stack.sh` copies `services/ui-static/index.html` into `infra/helm/files/index.html` and `infra/k8s/ui-index/index.html` each run, so the UI only needs to be edited in one place while keeping the deployment manifests satisfied. The copies are `.gitignore`d and regenerated automatically.
