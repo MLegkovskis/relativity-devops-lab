@@ -34,8 +34,10 @@ fatal() {
 
 sync_ui_assets() {
   [[ -f $UI_SOURCE ]] || fatal "UI source HTML not found at $UI_SOURCE"
-  [[ -f $HELM_INDEX ]] || fatal "Helm UI asset missing at $HELM_INDEX (ensure symlink exists)"
-  [[ -f $K8S_INDEX ]] || fatal "k3s UI asset missing at $K8S_INDEX (ensure symlink exists)"
+  mkdir -p "$(dirname "$HELM_INDEX")"
+  mkdir -p "$(dirname "$K8S_INDEX")"
+  ln -sf "$UI_SOURCE" "$HELM_INDEX"
+  ln -sf "$UI_SOURCE" "$K8S_INDEX"
 }
 
 wait_for_url() {
