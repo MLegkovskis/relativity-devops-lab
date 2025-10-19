@@ -13,7 +13,10 @@ echo "[setup] Updating apt repositories"
 apt-get update -y
 
 echo "[setup] Installing base packages"
-apt-get install -y docker.io docker-compose-plugin curl git jq unzip rsync
+apt-get install -y curl git jq unzip rsync
+
+echo "[setup] Installing Docker engine + compose plugin"
+curl -fsSL https://get.docker.com | sh
 
 echo "[setup] Enabling Docker"
 systemctl enable --now docker
