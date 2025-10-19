@@ -5,6 +5,12 @@ labels:
   - includeSelectors: true
     pairs:
       app.kubernetes.io/managed-by: kustomize
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: ui-index
+    files:
+      - index.html=ui-index/index.html
 resources:
   - namespace.yaml
   - redis.yaml

@@ -1,0 +1,191 @@
+name: Deploy Tri-Stack to AWS EC2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - cloud
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT_TAG: tri-stack-demo
+  SECURITY_GROUP_NAME: tri-stack-demo-sg
+  COMPOSE_UI_PORT: "8080"
+  K3S_UI_PORT: "30080"
+  HELM_UI_PORT: "31080"
+  EIP_ALLOCATION_ID: eipalloc-0c3424a1ac1587995
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure security group
+        id: sg
+        run: |
+          set -euo pipefail
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
+          if [[ "$VPC_ID" == "None" ]]; then
+            echo "No default VPC found in region ${AWS_REGION}" >&2
+            exit 1
+          fi
+
+          SG_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=${SECURITY_GROUP_NAME}" \
+            --query "SecurityGroups[0].GroupId" --output text)
+
+          if [[ "$SG_ID" == "None" ]]; then
+            SG_ID=$(aws ec2 create-security-group \
+              --group-name "${SECURITY_GROUP_NAME}" \
+              --description "Tri-stack demo" \
+              --vpc-id "$VPC_ID" \
+              --query 'GroupId' --output text)
+          fi
+
+          for PORT in 22 8000 8001 8080 30080 30081 30082 31080 31081 31082; do
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$SG_ID" \
+              --protocol tcp \
+              --port "$PORT" \
+              --cidr 0.0.0.0/0 2>err.log || {
+                if ! grep -q 'InvalidPermission.Duplicate' err.log; then
+                  cat err.log >&2
+                  exit 1
+                fi
+              }
+            rm -f err.log
+          done
+
+          echo "SECURITY_GROUP_ID=$SG_ID" >> "$GITHUB_ENV"
+
+      - name: Terminate previous demo instances
+        run: |
+          set -euo pipefail
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=${PROJECT_TAG}" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+
+          if [[ -n "$INSTANCE_IDS" ]]; then
+            echo "Terminating old instances: $INSTANCE_IDS"
+            aws ec2 terminate-instances --instance-ids $INSTANCE_IDS >/dev/null
+            aws ec2 wait instance-terminated --instance-ids $INSTANCE_IDS
+          fi
+
+      - name: Launch EC2 instance
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.EC2_KEY_PAIR_NAME }}" ]]; then
+            echo "EC2_KEY_PAIR_NAME secret is required" >&2
+            exit 1
+          fi
+
+          AMI_ID=$(aws ec2 describe-images \
+            --owners 099720109477 \
+            --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" "Name=architecture,Values=x86_64" "Name=virtualization-type,Values=hvm" \
+            --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+            --output text)
+
+          if [[ -z "$AMI_ID" || "$AMI_ID" == "None" ]]; then
+            echo "Failed to resolve Ubuntu 22.04 AMI" >&2
+            exit 1
+          fi
+
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id "$AMI_ID" \
+            --instance-type t3.medium \
+            --key-name "${{ secrets.EC2_KEY_PAIR_NAME }}" \
+            --security-group-ids "$SECURITY_GROUP_ID" \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=tri-stack-demo},{Key=Project,Value=${PROJECT_TAG}}]" \
+            --query 'Instances[0].InstanceId' --output text)
+
+          echo "Launched instance $INSTANCE_ID"
+          echo "EC2_INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_ENV"
+
+          aws ec2 wait instance-status-ok --instance-ids "$INSTANCE_ID"
+
+          PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
+          PUBLIC_DNS=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
+          if [[ "$PUBLIC_DNS" != "None" ]]; then
+            echo "PUBLIC_HOST=$PUBLIC_DNS" >> "$GITHUB_ENV"
+          else
+            echo "PUBLIC_HOST=$PUBLIC_IP" >> "$GITHUB_ENV"
+          fi
+
+      - name: Associate Elastic IP
+        run: |
+          set -euo pipefail
+          aws ec2 associate-address \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --allocation-id "$EIP_ALLOCATION_ID" \
+            --allow-reassociation >/dev/null
+          PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
+          PUBLIC_DNS=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
+          if [[ "$PUBLIC_DNS" != "None" ]]; then
+            echo "PUBLIC_HOST=$PUBLIC_DNS" >> "$GITHUB_ENV"
+          else
+            echo "PUBLIC_HOST=$PUBLIC_IP" >> "$GITHUB_ENV"
+          fi
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          KEY_FILE="$HOME/tri-stack-key.pem"
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          echo "SSH_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Wait for SSH
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            if ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@"$PUBLIC_IP" "echo ssh-ready" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "SSH connection timed out" >&2
+          exit 1
+
+      - name: Provision host prerequisites
+        run: |
+          set -euo pipefail
+          scp -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no tools/setup-ubuntu-host.sh ubuntu@"$PUBLIC_IP":/home/ubuntu/setup-ubuntu-host.sh
+          ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no ubuntu@"$PUBLIC_IP" "chmod +x setup-ubuntu-host.sh"
+          ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no ubuntu@"$PUBLIC_IP" "sudo REMOTE_USER=ubuntu ./setup-ubuntu-host.sh"
+
+      - name: Sync repository to instance
+        run: |
+          set -euo pipefail
+          rsync -az -e "ssh -i $SSH_KEY_PATH -o StrictHostKeyChecking=no" --delete --exclude '.git' ./ ubuntu@"$PUBLIC_IP":~/relativity-devops-lab
+
+      - name: Launch tri-stack
+        run: |
+          set -euo pipefail
+          ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no ubuntu@"$PUBLIC_IP" "export KUBECONFIG=/home/ubuntu/.kube/config && cd relativity-devops-lab && ./tools/tri-stack.sh"
+
+      - name: Output endpoints
+        run: |
+          printf 'Public URLs:\n'
+          printf ' - Compose:   http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$COMPOSE_UI_PORT"
+          printf ' - k3s:       http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$K3S_UI_PORT"
+          printf ' - Helm UI:   http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$HELM_UI_PORT"
+
+      - name: Post deployment info
+        if: always()
+        run: |
+          echo "Instance ID: $EC2_INSTANCE_ID"
+          echo "Public IP: $PUBLIC_IP"
+          echo "Public host: ${PUBLIC_HOST:-$PUBLIC_IP}"
+          echo "Visit http://${PUBLIC_HOST:-$PUBLIC_IP}:$COMPOSE_UI_PORT"

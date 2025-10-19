@@ -364,3 +364,70 @@ Both environments share the same code, Dockerfiles, and environment variables. T
 The code stays constant while the orchestration changes. By diffing the Compose and Kubernetes directories you can see exactly what extra plumbing Kubernetes expects—namespaces, services, NodePorts, rollouts—without changing a single line of application logic. That tangible comparison makes it an effective jump-off point for learning containers, microservices, and modern platform engineering.
 
 Enjoy the journey!
+
+---
+
+## Automated AWS Deployment (GitHub Actions)
+
+A GitHub Actions workflow (`.github/workflows/deploy-aws.yml`) spins up all three orchestrations—Docker Compose, k3s, and Helm—on a fresh Ubuntu EC2 instance inside `eu-west-2`. Each run destroys the previous instance, provisions a new one, installs dependencies, and executes `./tools/tri-stack.sh`. An Elastic IP (`eipalloc-0c3424a1ac1587995`) is attached so the public endpoints stay stable between runs.
+
+### Prerequisites
+
+1. **IAM credentials** – Create an IAM user with programmatic access (AdministratorAccess for the MVP). Add the access key pair to your repo secrets as `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
+2. **EC2 key pair** – Create once and record both the name and private key:
+   ```bash
+   aws ec2 create-key-pair \
+     --region eu-west-2 \
+     --key-name tri-stack-deploy \
+     --query 'KeyMaterial' --output text > tri-stack-deploy.pem
+   chmod 600 tri-stack-deploy.pem
+   ```
+   Add secrets `EC2_KEY_PAIR_NAME=tri-stack-deploy` and `EC2_SSH_KEY=<contents of pem>`.
+3. **Elastic IP** – Already allocated in this repo (`eipalloc-0c3424a1ac1587995`). If you provision a different address, update `EIP_ALLOCATION_ID` in the workflow.
+4. **GitHub Actions runners** – Default shared runners are sufficient.
+
+### What the Workflow Does
+
+1. Ensures a security group (`tri-stack-demo-sg`) exists in the default VPC with ingress on ports `22`, `8000`, `8001`, `8080`, `30080-30082`, and `31080-31082`.
+2. Terminates any EC2 instance tagged `Project=tri-stack-demo` to guarantee a clean environment.
+3. Launches a new `t3.medium` Ubuntu 22.04 instance using the configured key pair.
+4. Associates the Elastic IP, capturing both the public IP and the AWS DNS hostname (for example `ec2-18-169-114-79.eu-west-2.compute.amazonaws.com`).
+5. Copies the repo to the instance, runs `tools/setup-ubuntu-host.sh` to install Docker, k3s, Helm, etc., and executes `./tools/tri-stack.sh` (all three targets).
+6. Prints the three persistent URLs:
+   - Compose → `http://ec2-18-169-114-79.eu-west-2.compute.amazonaws.com:8080`
+   - k3s → `http://ec2-18-169-114-79.eu-west-2.compute.amazonaws.com:30080`
+   - Helm → `http://ec2-18-169-114-79.eu-west-2.compute.amazonaws.com:31080`
+
+The APIs sit on predictable ports as well:
+
+| Stack            | ray-api                        | blackhole-api                   |
+|------------------|--------------------------------|---------------------------------|
+| Docker Compose   | `http://<host>:8000`           | `http://<host>:8001`            |
+| k3s (NodePort)   | `http://<host>:30081`          | `http://<host>:30082`           |
+| Helm (NodePort)  | `http://<host>:31081`          | `http://<host>:31082`           |
+
+### tri-stack Helper Script
+
+`tools/tri-stack.sh` orchestrates the three deployment methods. It always:
+
+1. Syncs `services/ui-static/index.html` into the Helm and k3s directories (the copies are regenerated each run).
+2. Tears down any previous Compose/k3s/Helm resources to avoid clashes.
+3. Brings up the requested stacks (`./tools/tri-stack.sh` for all, or pass `compose`, `k8s`, and/or `helm`).
+4. Waits for the UIs to respond before returning, giving you readiness feedback in CI logs.
+
+You can use the same script locally for targeted testing:
+```bash
+./tools/tri-stack.sh compose          # just Docker Compose
+./tools/tri-stack.sh k8s helm         # Kubernetes stacks only
+./tools/tri-stack.sh                  # all three orchestrations
+```
+
+### Bootstrap Script
+
+`tools/setup-ubuntu-host.sh` is the one-time host configuration used by the pipeline. It installs Docker (with the Compose plugin), k3s (configuring kubeconfig for the ubuntu user), Helm, and supporting packages. Run it manually with:
+```bash
+scp tools/setup-ubuntu-host.sh ubuntu@<host>:/tmp/setup.sh
+ssh ubuntu@<host> "sudo REMOTE_USER=ubuntu bash /tmp/setup.sh"
+```
+
+With these pieces in place, every push to `main` (or a manual `workflow_dispatch`) reprovisions the EC2 host, deploys the tri-stack, and keeps the public URLs stable.
