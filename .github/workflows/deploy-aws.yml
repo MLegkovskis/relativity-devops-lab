@@ -115,6 +115,12 @@ jobs:
 
           PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
           echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
+          PUBLIC_DNS=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
+          if [[ "$PUBLIC_DNS" != "None" ]]; then
+            echo "PUBLIC_HOST=$PUBLIC_DNS" >> "$GITHUB_ENV"
+          else
+            echo "PUBLIC_HOST=$PUBLIC_IP" >> "$GITHUB_ENV"
+          fi
 
       - name: Associate Elastic IP
         run: |
@@ -125,6 +131,12 @@ jobs:
             --allow-reassociation >/dev/null
           PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
           echo "PUBLIC_IP=$PUBLIC_IP" >> "$GITHUB_ENV"
+          PUBLIC_DNS=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
+          if [[ "$PUBLIC_DNS" != "None" ]]; then
+            echo "PUBLIC_HOST=$PUBLIC_DNS" >> "$GITHUB_ENV"
+          else
+            echo "PUBLIC_HOST=$PUBLIC_IP" >> "$GITHUB_ENV"
+          fi
 
       - name: Prepare SSH key
         run: |
@@ -166,13 +178,14 @@ jobs:
       - name: Output endpoints
         run: |
           printf 'Public URLs:\n'
-          printf ' - Compose:   http://%s:%s\n' "$PUBLIC_IP" "$COMPOSE_UI_PORT"
-          printf ' - k3s:       http://%s:%s\n' "$PUBLIC_IP" "$K3S_UI_PORT"
-          printf ' - Helm UI:   http://%s:%s\n' "$PUBLIC_IP" "$HELM_UI_PORT"
+          printf ' - Compose:   http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$COMPOSE_UI_PORT"
+          printf ' - k3s:       http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$K3S_UI_PORT"
+          printf ' - Helm UI:   http://%s:%s\n' "${PUBLIC_HOST:-$PUBLIC_IP}" "$HELM_UI_PORT"
 
       - name: Post deployment info
         if: always()
         run: |
           echo "Instance ID: $EC2_INSTANCE_ID"
           echo "Public IP: $PUBLIC_IP"
-          echo "Visit http://$PUBLIC_IP:$COMPOSE_UI_PORT"
+          echo "Public host: ${PUBLIC_HOST:-$PUBLIC_IP}"
+          echo "Visit http://${PUBLIC_HOST:-$PUBLIC_IP}:$COMPOSE_UI_PORT"
